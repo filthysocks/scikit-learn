@@ -4,6 +4,7 @@ Testing for Gaussian Process module (sklearn.gaussian_process)
 
 # Author: Vincent Dubourg <vincent.dubourg@gmail.com>
 # Licence: BSD 3 clause
+
 from nose.tools import raises
 from nose.tools import assert_true
 
@@ -139,45 +140,3 @@ def test_no_normalize():
     gp = GaussianProcess(normalize=False).fit(X, y)
     y_pred = gp.predict(X)
     assert_true(np.allclose(y_pred, y))
-
-
-@raises(ValueError)
-def test_no_multiple_feature():
-    '''
-    check that multiple features are not allowed for non-noisy data
-    '''
-    X = np.array([[-4.61611719, -6.00099547],
-                  [4.10469096, 5.32782448],
-                  [0.00000000, -0.50000000],
-                  [-6.17289014, -4.6984743],
-                  [-6.17289014, -4.6984743],
-                  [1.3109306, -6.93271427],
-                  [-5.03823144, 3.10584743],
-                  [-2.87600388, 6.74310541],
-                  [5.21301203, 4.26386883]])
-
-    check2d(X)
-
-
-def test_1d_noisy(regr=regression.constant, corr=correlation.absolute_exponential,
-                  random_start=10, beta0=None):
-    """
-    MLE estimation of a one-dimensional Gaussian Process model.
-    Check random start optimization with noisy / duplicate inputs.
-
-    Test the interpolating property.
-    """
-
-    X = np.atleast_2d([1., 3., 5., 6., 7., 8., 9., 10.] * 2).T
-    x = np.atleast_2d(np.linspace(0, 10, 50)).T
-
-    rs = np.random.RandomState(0)
-    y = f(X).ravel() + rs.normal(0, 0.1, len(X))
-
-    gp = GaussianProcess(regr=regr, corr=corr, beta0=beta0,
-                         theta0=1e-2, thetaL=1e-4, thetaU=1e-1,
-                         random_start=random_start, verbose=False, nugget=0.01).fit(X, y)
-    y_pred, MSE = gp.predict(x, eval_MSE=True)
-
-    y = f(x).ravel()
-    assert_true((np.abs(y_pred - y) <= (1.96 * MSE)  ).all())  #check that true value is within 95% conf. int.
