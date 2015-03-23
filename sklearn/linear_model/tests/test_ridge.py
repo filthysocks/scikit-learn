@@ -99,9 +99,9 @@ def test_ridge_singular():
     # test on a singular matrix
     rng = np.random.RandomState(0)
     n_samples, n_features = 6, 6
-    y = rng.randn(n_samples / 2)
+    y = rng.randn(n_samples // 2)
     y = np.concatenate((y, y))
-    X = rng.randn(n_samples / 2, n_features)
+    X = rng.randn(n_samples // 2, n_features)
     X = np.concatenate((X, X), axis=0)
 
     ridge = Ridge(alpha=0)
@@ -634,23 +634,6 @@ def test_sparse_design_with_sample_weights():
 
             assert_array_almost_equal(sparse_ridge.coef_, dense_ridge.coef_,
                                       decimal=6)
-
-
-def test_deprecation_warning_dense_cholesky():
-    """Tests if DeprecationWarning is raised at instantiation of estimators
-    and when ridge_regression is called"""
-
-    warning_class = DeprecationWarning
-    warning_message = ("The name 'dense_cholesky' is deprecated."
-                       " Using 'cholesky' instead")
-    func1 = lambda: Ridge(solver='dense_cholesky')
-    func2 = lambda: RidgeClassifier(solver='dense_cholesky')
-    X = np.ones([3, 2])
-    y = np.zeros(3)
-    func3 = lambda: ridge_regression(X, y, alpha=1, solver='dense_cholesky')
-
-    for func in [func1, func2, func3]:
-        assert_warns_message(warning_class, warning_message, func)
 
 
 def test_raises_value_error_if_sample_weights_greater_than_1d():

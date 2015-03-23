@@ -4,6 +4,8 @@
 # The behavior of the script is controlled by environment variabled defined
 # in the .travis.yml in the top level folder of the project.
 
+# License: 3-clause BSD
+
 set -e
 
 python --version
@@ -11,9 +13,22 @@ python -c "import numpy; print('numpy %s' % numpy.__version__)"
 python -c "import scipy; print('scipy %s' % scipy.__version__)"
 python setup.py build_ext --inplace
 
+# Skip tests that require large downloads over the network to save bandwith
+# usage as travis workers are stateless and therefore traditional local
+# disk caching does not work.
+export SKLEARN_SKIP_NETWORK_TESTS=1
+
 if [[ "$COVERAGE" == "true" ]]; then
-    export WITH_COVERAGE="--with-coverage"
+    CONVERAGE_FLAGS="--with-coverage"
 else
-    export WITH_COVERAGE=""
+    CONVERAGE_FLAGS=""
 fi
-nosetests -s -v $WITH_COVERAGE sklearn
+
+# Disable joblib tests that use multiprocessing on travis as they tend to cause
+# random crashes when calling `os.fork()`:
+#   OSError: [Errno 12] Cannot allocate memory
+nosetests -s -v $CONVERAGE_FLAGS --with-noseexclude \
+  --exclude-test-file=continuous_integration/exclude_joblib_mp.txt \
+  sklearn
+
+make test-doc test-sphinxext

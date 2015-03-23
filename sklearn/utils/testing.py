@@ -8,12 +8,14 @@
 #          Arnaud Joly
 #          Denis Engemann
 # License: BSD 3 clause
+import os
 import inspect
 import pkgutil
 import warnings
 import sys
 import re
 import platform
+import os
 
 import scipy as sp
 import scipy.io
@@ -52,7 +54,9 @@ from sklearn.base import (ClassifierMixin, RegressorMixin, TransformerMixin,
 __all__ = ["assert_equal", "assert_not_equal", "assert_raises",
            "assert_raises_regexp", "raises", "with_setup", "assert_true",
            "assert_false", "assert_almost_equal", "assert_array_equal",
-           "assert_array_almost_equal", "assert_array_less"]
+           "assert_array_almost_equal", "assert_array_less",
+           "assert_less", "assert_less_equal",
+           "assert_greater", "assert_greater_equal"]
 
 
 try:
@@ -103,6 +107,20 @@ def _assert_greater(a, b, msg=None):
     assert a > b, message
 
 
+def assert_less_equal(a, b, msg=None):
+    message = "%r is not lower than or equal to %r" % (a, b)
+    if msg is not None:
+        message += ": " + msg
+    assert a <= b, message
+
+
+def assert_greater_equal(a, b, msg=None):
+    message = "%r is not greater than or equal to %r" % (a, b)
+    if msg is not None:
+        message += ": " + msg
+    assert a >= b, message
+
+
 # To remove when we support numpy 1.7
 def assert_warns(warning_class, func, *args, **kw):
     """Test that a certain warning occurs.
@@ -133,6 +151,11 @@ def assert_warns(warning_class, func, *args, **kw):
         warnings.simplefilter("always")
         # Trigger a warning.
         result = func(*args, **kw)
+        if hasattr(np, 'VisibleDeprecationWarning'):
+            # Filter out numpy-specific warnings in numpy >= 1.9
+            w = [e for e in w
+                 if not e.category is np.VisibleDeprecationWarning]
+
         # Verify some things
         if not len(w) > 0:
             raise AssertionError("No warning raised when calling %s"
@@ -177,6 +200,9 @@ def assert_warns_message(warning_class, message, func, *args, **kw):
     with warnings.catch_warnings(record=True) as w:
         # Cause all warnings to always be triggered.
         warnings.simplefilter("always")
+        if hasattr(np, 'VisibleDeprecationWarning'):
+            # Let's not catch the numpy internal DeprecationWarnings
+            warnings.simplefilter('ignore', np.VisibleDeprecationWarning)
         # Trigger a warning.
         result = func(*args, **kw)
         # Verify some things
@@ -215,6 +241,11 @@ def assert_no_warnings(func, *args, **kw):
         warnings.simplefilter('always')
 
         result = func(*args, **kw)
+        if hasattr(np, 'VisibleDeprecationWarning'):
+            # Filter out numpy-specific warnings in numpy >= 1.9
+            w = [e for e in w
+                 if not e.category is np.VisibleDeprecationWarning]
+
         if len(w) > 0:
             raise AssertionError("Got warnings when calling %s: %s"
                                  % (func.__name__, w))
@@ -572,9 +603,28 @@ def if_not_mac_os(versions=('10.7', '10.8', '10.9'),
 
 
 def clean_warning_registry():
-    """Safe way to reset warniings """
+    """Safe way to reset warnings """
     warnings.resetwarnings()
     reg = "__warningregistry__"
-    for mod in sys.modules.values():
+    for mod_name, mod in list(sys.modules.items()):
+        if 'six.moves' in mod_name:
+            continue
         if hasattr(mod, reg):
             getattr(mod, reg).clear()
+
+
+def check_skip_network():
+    if int(os.environ.get('SKLEARN_SKIP_NETWORK_TESTS', 0)):
+        raise SkipTest("Text tutorial requires large dataset download")
+
+
+with_network = with_setup(check_skip_network)
+
+
+def check_skip_travis():
+    """Skip test if being run on Travis."""
+    if os.environ.get('TRAVIS') == "true":
+        raise SkipTest("This test needs to be skipped on Travis")
+
+
+with_network = with_setup(check_skip_network)

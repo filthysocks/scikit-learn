@@ -292,6 +292,9 @@ class PCA(BaseEstimator, TransformerMixin):
 
             n_components = _infer_dimension_(explained_variance_,
                                              n_samples, n_features)
+        elif not 0 <= n_components <= n_features:
+            raise ValueError("n_components=%r invalid for n_features=%d"
+                             % (n_components, n_features))
 
         if 0 < n_components < 1.0:
             # number of components for which the cumulated explained variance
@@ -372,6 +375,9 @@ class PCA(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         """Apply the dimensionality reduction on X.
+
+        X is projected on the first principal components previous extracted
+        from a training set.
 
         Parameters
         ----------
@@ -625,7 +631,7 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         self.random_state = random_state
 
     def fit(self, X, y=None):
-        """Fit the model with X.
+        """Fit the model with X by extracting the first principal components.
 
         Parameters
         ----------
@@ -657,9 +663,10 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         """
         random_state = check_random_state(self.random_state)
         if sparse.issparse(X):
-            warnings.warn("Sparse matrix support is deprecated"
-                          " and will be dropped in 0.16."
-                          " Use TruncatedSVD instead.",
+            warnings.warn("Sparse matrix support is deprecated in 0.15"
+                          " and will be dropped in 0.17. In particular"
+                          " computed explained variance is incorrect on"
+                          " sparse data. Use TruncatedSVD instead.",
                           DeprecationWarning)
         else:
             # not a sparse matrix, ensure this is a 2D array
@@ -700,6 +707,9 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         """Apply dimensionality reduction on X.
 
+        X is projected on the first principal components previous extracted
+        from a training set.
+
         Parameters
         ----------
         X : array-like, shape (n_samples, n_features)
@@ -720,7 +730,7 @@ class RandomizedPCA(BaseEstimator, TransformerMixin):
         return X
 
     def fit_transform(self, X, y=None):
-        """Apply dimensionality reduction on X.
+        """Fit the model with X and apply the dimensionality reduction on X.
 
         Parameters
         ----------

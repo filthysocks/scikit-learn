@@ -19,7 +19,6 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 from scipy.sparse import issparse
-import warnings
 
 from .base import BaseEstimator, ClassifierMixin
 from .preprocessing import binarize
@@ -171,7 +170,7 @@ class GaussianNB(BaseNB):
         joint_log_likelihood = []
         for i in range(np.size(self.classes_)):
             jointi = np.log(self.class_prior_[i])
-            n_ij = - 0.5 * np.sum(np.log(np.pi * self.sigma_[i, :]))
+            n_ij = - 0.5 * np.sum(np.log(2. * np.pi * self.sigma_[i, :]))
             n_ij -= 0.5 * np.sum(((X - self.theta_[i, :]) ** 2) /
                                  (self.sigma_[i, :]), 1)
             joint_log_likelihood.append(jointi + n_ij)
@@ -299,7 +298,6 @@ class BaseDiscreteNB(BaseNB):
             Returns self.
         """
         X, y = check_arrays(X, y, sparse_format='csr')
-        X = X.astype(np.float)
         y = column_or_1d(y, warn=True)
         _, n_features = X.shape
 
@@ -309,7 +307,8 @@ class BaseDiscreteNB(BaseNB):
         if Y.shape[1] == 1:
             Y = np.concatenate((1 - Y, Y), axis=1)
 
-        # convert to float to support sample weight consistently
+        # convert to float to support sample weight consistently;
+        # this means we also don't have to cast X to floating point
         Y = Y.astype(np.float64)
         if sample_weight is not None:
             Y *= array2d(sample_weight).T

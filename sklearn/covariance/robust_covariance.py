@@ -217,7 +217,7 @@ def select_candidates(X, n_support, n_trials, select=1, n_iter=30,
 
     See Also
     ---------
-    `c_step` function
+    c_step
 
     Returns
     -------
@@ -681,7 +681,7 @@ class MinCovDet(EmpiricalCovariance):
             location_reweighted = data[mask].mean(0)
         covariance_reweighted = self._nonrobust_covariance(
             data[mask], assume_centered=self.assume_centered)
-        support_reweighted = np.zeros(n_samples).astype(bool)
+        support_reweighted = np.zeros(n_samples, dtype=bool)
         support_reweighted[mask] = True
         self._set_covariance(covariance_reweighted)
         self.location_ = location_reweighted

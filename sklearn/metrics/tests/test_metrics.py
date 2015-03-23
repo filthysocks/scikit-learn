@@ -7,8 +7,9 @@ import warnings
 
 from sklearn import datasets
 from sklearn import svm
+from sklearn import ensemble
 
-from sklearn.preprocessing import LabelBinarizer
+from sklearn.preprocessing import LabelBinarizer, MultiLabelBinarizer
 from sklearn.datasets import make_multilabel_classification
 from sklearn.utils import check_random_state, shuffle
 from sklearn.utils.multiclass import unique_labels
@@ -464,6 +465,31 @@ def test_roc_returns_consistency():
     assert_array_almost_equal(tpr, tpr_correct, decimal=2)
     assert_equal(fpr.shape, tpr.shape)
     assert_equal(fpr.shape, thresholds.shape)
+
+
+def test_roc_nonrepeating_thresholds():
+    """Test to ensure that we don't return spurious repeating thresholds.
+
+    Duplicated thresholds can arise due to machine precision issues.
+    """
+    dataset = datasets.load_digits()
+    X = dataset['data']
+    y = dataset['target']
+
+    # This random forest classifier can only return probabilities
+    # significant to two decimal places
+    clf = ensemble.RandomForestClassifier(n_estimators=100, random_state=0)
+
+    # How well can the classifier predict whether a digit is less than 5?
+    # This task contributes floating point roundoff errors to the probabilities
+    train, test = slice(None, None, 2), slice(1, None, 2)
+    probas_pred = clf.fit(X[train], y[train]).predict_proba(X[test])
+    y_score = probas_pred[:, :5].sum(axis=1)  # roundoff errors begin here
+    y_true = [yy < 5 for yy in y[test]]
+
+    # Check for repeating values in the thresholds
+    fpr, tpr, thresholds = roc_curve(y_true, y_score)
+    assert_equal(thresholds.size, np.unique(np.round(thresholds, 2)).size)
 
 
 def test_roc_curve_multi():
@@ -1061,14 +1087,12 @@ def test_multilabel_classification_report():
 
     n_classes = 4
     n_samples = 50
-    _, y_true_ll = make_multilabel_classification(n_features=1,
-                                                  n_classes=n_classes,
-                                                  random_state=0,
-                                                  n_samples=n_samples)
-    _, y_pred_ll = make_multilabel_classification(n_features=1,
-                                                  n_classes=n_classes,
-                                                  random_state=1,
-                                                  n_samples=n_samples)
+    # using sequence of sequences is deprecated, but still tested
+    make_ml = ignore_warnings(make_multilabel_classification)
+    _, y_true_ll = make_ml(n_features=1, n_classes=n_classes, random_state=0,
+                           n_samples=n_samples)
+    _, y_pred_ll = make_ml(n_features=1, n_classes=n_classes, random_state=1,
+                           n_samples=n_samples)
 
     expected_report = """\
              precision    recall  f1-score   support
@@ -1081,7 +1105,7 @@ def test_multilabel_classification_report():
 avg / total       0.45      0.54      0.47        85
 """
 
-    lb = LabelBinarizer()
+    lb = MultiLabelBinarizer()
     lb.fit([range(4)])
     y_true_bi = lb.transform(y_true_ll)
     y_pred_bi = lb.transform(y_pred_ll)
@@ -1109,6 +1133,21 @@ def test_precision_recall_curve():
     assert_array_almost_equal(t, np.array([1, 2, 3, 4]))
     assert_equal(p.size, r.size)
     assert_equal(p.size, t.size + 1)
+
+
+def test_precision_recall_curve_pos_label():
+    y_true, _, probas_pred = make_prediction(binary=False)
+    pos_label = 2
+    p, r, thresholds = precision_recall_curve(y_true,
+                                              probas_pred[:, pos_label],
+                                              pos_label=pos_label)
+    p2, r2, thresholds2 = precision_recall_curve(y_true == pos_label,
+                                                 probas_pred[:, pos_label])
+    assert_array_almost_equal(p, p2)
+    assert_array_almost_equal(r, r2)
+    assert_array_almost_equal(thresholds, thresholds2)
+    assert_equal(p.size, r.size)
+    assert_equal(p.size, thresholds.size + 1)
 
 
 def _test_precision_recall_curve(y_true, probas_pred):
@@ -1631,10 +1670,12 @@ def test_multilabel_representation_invariance():
     # Generate some data
     n_classes = 4
     n_samples = 50
-    _, y1 = make_multilabel_classification(n_features=1, n_classes=n_classes,
-                                           random_state=0, n_samples=n_samples)
-    _, y2 = make_multilabel_classification(n_features=1, n_classes=n_classes,
-                                           random_state=1, n_samples=n_samples)
+    # using sequence of sequences is deprecated, but still tested
+    make_ml = ignore_warnings(make_multilabel_classification)
+    _, y1 = make_ml(n_features=1, n_classes=n_classes, random_state=0,
+                    n_samples=n_samples)
+    _, y2 = make_ml(n_features=1, n_classes=n_classes, random_state=1,
+                    n_samples=n_samples)
 
     # Be sure to have at least one empty label
     y1 += ([], )
@@ -1652,7 +1693,7 @@ def test_multilabel_representation_invariance():
     y2_redundant = [x * rng.randint(1, 4) for x in y2]
 
     # Binary indicator matrix format
-    lb = LabelBinarizer().fit([range(n_classes)])
+    lb = MultiLabelBinarizer().fit([range(n_classes)])
     y1_binary_indicator = lb.transform(y1)
     y2_binary_indicator = lb.transform(y2)
 
@@ -1666,8 +1707,9 @@ def test_multilabel_representation_invariance():
         if isinstance(metric, partial):
             metric.__module__ = 'tmp'
             metric.__name__ = name
+        # Check warning for sequence of sequences
+        measure = assert_warns(DeprecationWarning, metric, y1, y2)
         metric = ignore_warnings(metric)
-        measure = metric(y1, y2)
 
         # Check representation invariance
         assert_almost_equal(metric(y1_binary_indicator,
@@ -1857,21 +1899,19 @@ def test_normalize_option_multilabel_classification():
     # Test in the multilabel case
     n_classes = 4
     n_samples = 100
-    _, y_true = make_multilabel_classification(n_features=1,
-                                               n_classes=n_classes,
-                                               random_state=0,
-                                               n_samples=n_samples)
-    _, y_pred = make_multilabel_classification(n_features=1,
-                                               n_classes=n_classes,
-                                               random_state=1,
-                                               n_samples=n_samples)
+    # using sequence of sequences is deprecated, but still tested
+    make_ml = ignore_warnings(make_multilabel_classification)
+    _, y_true = make_ml(n_features=1, n_classes=n_classes,
+                        random_state=0, n_samples=n_samples)
+    _, y_pred = make_ml(n_features=1, n_classes=n_classes,
+                        random_state=1, n_samples=n_samples)
 
     # Be sure to have at least one empty label
     y_true += ([], )
     y_pred += ([], )
     n_samples += 1
 
-    lb = LabelBinarizer().fit([range(n_classes)])
+    lb = MultiLabelBinarizer().fit([range(n_classes)])
     y_true_binary_indicator = lb.transform(y_true)
     y_pred_binary_indicator = lb.transform(y_pred)
 
@@ -1879,7 +1919,8 @@ def test_normalize_option_multilabel_classification():
         metrics = ALL_METRICS[name]
 
         # List of list of labels
-        measure = metrics(y_true, y_pred, normalize=True)
+        measure = assert_warns(DeprecationWarning, metrics, y_true, y_pred,
+                               normalize=True)
         assert_greater(measure, 0,
                        msg="We failed to test correctly the normalize option")
         assert_almost_equal(metrics(y_true, y_pred, normalize=False)
@@ -2580,9 +2621,9 @@ def check_sample_weight_invariance(name, metric, y1, y2):
                                    sample_weight=sample_weight_subset)
     weighted_score_zeroed = metric(y1, y2,
                                    sample_weight=sample_weight_zeroed)
-    assert_equal(
+    assert_almost_equal(
         weighted_score_subset, weighted_score_zeroed,
-        msg="Zeroing weights does not give the same result as "
+        err_msg="Zeroing weights does not give the same result as "
             "removing the corresponding samples (%f != %f) for %s" % (
                 weighted_score_zeroed, weighted_score_subset, name))
 
